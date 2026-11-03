@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="CodeMaster: retos de programación de la Facultad de Ingeniería. Codea. Compite. Gana.">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="CodeMaster">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>CodeMaster</title>
+  <link rel="manifest" href="/movil/manifest.webmanifest">
+  <link rel="icon" href="/img/favicon.png">
+  <link rel="apple-touch-icon" href="/img/icono-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
+  <link rel="stylesheet" href="/app/tema.css">
+</head>
+<body data-layout="movil" class="layout-movil">
+  <div id="app"></div>
+  <script type="module" src="/app/main.js"></script>
+  <script>
+    // Instalable como app (PWA). Los navegadores solo lo permiten en https o en localhost.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/movil/sw.js", { scope: "/movil/" }).catch(() => {});
+    }
+  </script>
+</body>
+</html>

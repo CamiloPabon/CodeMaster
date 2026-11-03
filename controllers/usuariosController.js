@@ -1,6 +1,9 @@
 import db from "../config/db.js";
 import validator from "validator";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+
+const ROLES = ["admin", "docente", "estudiante"];
 
 // GET
 const obtenerUsuarios = (req, res) => {
@@ -8,14 +11,17 @@ const obtenerUsuarios = (req, res) => {
 
   if (user.rol === "admin") {
     // Admin ve todos
-    db.query("SELECT id, nombre, correo FROM auth_users", (err, results) => {
-      if (err) return res.status(500).send(err);
-      return res.json(results);
-    });
+    db.query(
+      "SELECT u.id, u.name AS nombre, u.email AS correo, r.tipo_rol AS rol FROM users u JOIN rol r ON r.idROLES = u.rol_idROLES",
+      (err, results) => {
+        if (err) return res.status(500).send(err);
+        return res.json(results);
+      }
+    );
   } else {
     // Usuario normal solo se ve a sí mismo
     db.query(
-      "SELECT id, nombre, correo FROM auth_users WHERE id = ?",
+      "SELECT id, name AS nombre, email AS correo FROM users WHERE id = ?",
       [user.id],
       (err, results) => {
         if (err) return res.status(500).send(err);
@@ -25,11 +31,11 @@ const obtenerUsuarios = (req, res) => {
   }
 };
 
-// POST
-const crearUsuario = (req, res) => {
-  const { nombre, correo } = req.body;
+// POST (el admin puede crear docentes; el registro público siempre crea estudiantes)
+const crearUsuario = async (req, res) => {
+  const { nombre, correo, password, rol = "estudiante" } = req.body;
 
-  if (!nombre || !correo) {
+  if (!nombre || !correo || !password) {
     return res.status(400).json({ error: "Todos los campos son obligatorios" });
   }
 
@@ -37,9 +43,15 @@ const crearUsuario = (req, res) => {
     return res.status(400).json({ error: "Correo inválido" });
   }
 
+  if (!ROLES.includes(rol)) {
+    return res.status(400).json({ error: "Rol inválido" });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
   db.query(
-    "INSERT INTO usuarios (nombre, correo) VALUES (?, ?)",
-    [nombre, correo],
+    "INSERT INTO users (name, email, password, rol_idROLES) VALUES (?, ?, ?, (SELECT idROLES FROM rol WHERE tipo_rol = ?))",
+    [nombre, correo, hashedPassword, rol],
     (err, result) => {
       if (err) return res.status(500).send(err);
       res.json({ mensaje: "Usuario creado correctamente" });
@@ -47,14 +59,18 @@ const crearUsuario = (req, res) => {
   );
 };
 
-// PUT
+// PUT (rol es opcional; si no se envía, se conserva el actual)
 const actualizarUsuario = (req, res) => {
   const { id } = req.params;
-  const { nombre, correo } = req.body;
+  const { nombre, correo, rol } = req.body;
+
+  if (rol && !ROLES.includes(rol)) {
+    return res.status(400).json({ error: "Rol inválido" });
+  }
 
   db.query(
-    "UPDATE usuarios SET nombre = ?, correo = ? WHERE id = ?",
-    [nombre, correo, id],
+    "UPDATE users SET name = ?, email = ?, rol_idROLES = COALESCE((SELECT idROLES FROM rol WHERE tipo_rol = ?), rol_idROLES) WHERE id = ?",
+    [nombre, correo, rol ?? null, id],
     (err, result) => {
       if (err) return res.status(500).send(err);
       res.json({ mensaje: "Usuario actualizado correctamente" });
@@ -67,7 +83,7 @@ const eliminarUsuario = (req, res) => {
   const { id } = req.params;
 
   db.query(
-    "DELETE FROM usuarios WHERE id = ?",
+    "DELETE FROM users WHERE id = ?",
     [id],
     (err, result) => {
       if (err) return res.status(500).send(err);
