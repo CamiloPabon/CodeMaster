@@ -1,7 +1,7 @@
 // Crear: cursos y retos (docentes y administradores), editar los retos propios y, solo el admin, crear cuentas de docente.
 // Los estudiantes ven el editor libre.
 import { api, sesion, obtenerLenguajes, obtenerDificultades } from "../api.js";
-import { h, icono, ir, aviso, avisarLogros, dialogo, conCarga, pestanas, vacio, cargando, mostrarError, avatar } from "../ui.js";
+import { h, icono, ir, aviso, avisarLogros, dialogo, conCarga, pestanas, vacio, cargando, mostrarError, avatar, hojaAcciones, plural } from "../ui.js";
 import { tarjetaEditorLibre, tarjetaReto, eliminarReto } from "./retos.js";
 
 const MAX_CASOS = 5;
@@ -138,13 +138,89 @@ async function cargarDocentes(lista) {
               "div",
               { class: "fila", style: "margin-bottom:8px" },
               avatar(d.nombre, d.id),
-              h("div", { class: "fila-texto" }, h("p", { class: "fila-titulo", texto: d.nombre }), h("p", { class: "fila-sub", texto: d.correo }))
+              h(
+                "div",
+                { class: "fila-texto" },
+                h("p", { class: "fila-titulo", texto: d.nombre }),
+                h("p", { class: "fila-sub", texto: d.correo }),
+                h("p", { class: "meta", texto: `${plural(d.cursos, "curso")} · ${plural(d.retos, "reto")}` })
+              ),
+              h(
+                "button",
+                {
+                  class: "btn-icono",
+                  "aria-label": `Opciones de ${d.nombre}`,
+                  onclick: () =>
+                    hojaAcciones([
+                      ["edit", "Editar docente", () => editarDocente(d, () => cargarDocentes(lista))],
+                      ["delete", "Eliminar docente", () => eliminarDocente(d, () => cargarDocentes(lista))],
+                    ]),
+                },
+                icono("more_horiz")
+              )
             )
           )
         : [vacio("school", "Aún no hay docentes registrados.")])
     );
   } catch (error) {
     lista.replaceChildren(h("p", { class: "campo-error", texto: error.message }));
+  }
+}
+
+// Diálogo para cambiar nombre, correo y (opcionalmente) la contraseña de un docente.
+// Si algo falla, el diálogo se vuelve a abrir con lo que se había escrito.
+async function editarDocente(docente, alTerminar) {
+  const nombre = h("input", { maxlength: "255", valor: docente.nombre, "aria-label": "Nombre completo" });
+  const correo = h("input", { type: "email", maxlength: "255", valor: docente.correo, "aria-label": "Correo" });
+  const clave = h("input", { type: "text", maxlength: "72", placeholder: "Dejar vacío para no cambiarla", autocomplete: "new-password", "aria-label": "Nueva contraseña" });
+
+  while (
+    await dialogo({
+      titulo: "Editar docente",
+      contenido: [campo("Nombre completo", nombre), campo("Correo", correo), campo("Nueva contraseña", clave, "Opcional. Mínimo 6 caracteres.")],
+      aceptar: "Guardar",
+    })
+  ) {
+    const datos = { nombre: nombre.value.trim(), correo: correo.value.trim() };
+    if (clave.value) datos.password = clave.value;
+
+    if (!datos.nombre) aviso("Escribe el nombre del docente", "error");
+    else if (!CORREO.test(datos.correo)) aviso("Escribe un correo válido", "error");
+    else if (datos.password && datos.password.length < 6) aviso("La contraseña debe tener al menos 6 caracteres", "error");
+    else {
+      try {
+        await api(`/usuarios/${docente.id}`, { metodo: "PUT", datos });
+        aviso(datos.password ? "Docente actualizado. Comparte la nueva contraseña con el docente." : "Docente actualizado", "exito");
+        return alTerminar();
+      } catch (error) {
+        aviso(error.message, "error");
+      }
+    }
+  }
+}
+
+async function eliminarDocente(docente, alTerminar) {
+  const consecuencias = [];
+  if (docente.cursos) consecuencias.push(`Se eliminarán sus ${plural(docente.cursos, "curso")}, con sus miembros, likes y comentarios.`);
+  if (docente.retos) consecuencias.push(`Sus ${plural(docente.retos, "reto")} se conservarán, pero quedarán sin autor (solo un admin podrá editarlos).`);
+
+  const ok = await dialogo({
+    titulo: "¿Eliminar docente?",
+    contenido: [
+      h("p", { texto: `Se eliminará la cuenta de ${docente.nombre} (${docente.correo}). Esta acción no se puede deshacer.` }),
+      consecuencias.map((texto) => h("p", { style: "margin-top:8px", texto })),
+    ],
+    aceptar: "Eliminar",
+    peligro: true,
+  });
+  if (!ok) return;
+
+  try {
+    await api(`/usuarios/${docente.id}`, { metodo: "DELETE" });
+    aviso("Docente eliminado");
+    alTerminar();
+  } catch (error) {
+    aviso(error.message, "error");
   }
 }
 
