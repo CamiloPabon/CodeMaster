@@ -26,8 +26,6 @@ const register = async (req, res) => {
 // LOGIN
 // LOGIN
   const login = (req, res) => {// Definimos la función de login que se encargará de autenticar a los usuarios
-    console.log("ENTRÓ AL LOGIN");// Mostramos un mensaje en la consola para indicar que se ha entrado en la función de login
-    console.log("BODY:", req.body);// Mostramos el contenido del cuerpo de la solicitud para depuración, lo que nos permite ver qué datos se están enviando al endpoint de login
 
     const { correo, password } = req.body;// Extraemos el correo y la contraseña del cuerpo de la solicitud, que son necesarios para autenticar al usuario
 

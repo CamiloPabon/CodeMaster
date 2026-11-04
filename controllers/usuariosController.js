@@ -33,7 +33,9 @@ const obtenerUsuarios = (req, res) => {
 
 // POST (el admin puede crear docentes; el registro público siempre crea estudiantes)
 const crearUsuario = async (req, res) => {
-  const { nombre, correo, password, rol = "estudiante" } = req.body;
+  const { password, rol = "estudiante" } = req.body;
+  const nombre = String(req.body.nombre ?? "").trim();
+  const correo = String(req.body.correo ?? "").trim().toLowerCase();
 
   if (!nombre || !correo || !password) {
     return res.status(400).json({ error: "Todos los campos son obligatorios" });
@@ -43,18 +45,26 @@ const crearUsuario = async (req, res) => {
     return res.status(400).json({ error: "Correo inválido" });
   }
 
+  if (String(password).length < 6) {
+    return res.status(400).json({ error: "La contraseña debe tener al menos 6 caracteres" });
+  }
+
   if (!ROLES.includes(rol)) {
     return res.status(400).json({ error: "Rol inválido" });
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(String(password), 10);
 
   db.query(
     "INSERT INTO users (name, email, password, rol_idROLES) VALUES (?, ?, ?, (SELECT idROLES FROM rol WHERE tipo_rol = ?))",
     [nombre, correo, hashedPassword, rol],
     (err, result) => {
-      if (err) return res.status(500).send(err);
-      res.json({ mensaje: "Usuario creado correctamente" });
+      if (err?.code === "ER_DUP_ENTRY") return res.status(409).json({ error: "Ya existe una cuenta con ese correo" });
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: "No se pudo crear el usuario" });
+      }
+      res.status(201).json({ mensaje: "Usuario creado correctamente", id: result.insertId, nombre, correo, rol });
     }
   );
 };

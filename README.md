@@ -24,22 +24,48 @@ cd codemaster-backend
 2. Instalar dependencias
 npm install
 
-3. Crear archivo .env
+3. Crear archivo .env (copiar .env.example y poner los valores reales)
 
 DB_HOST=localhost
+DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=tu_contraseña
 DB_NAME=codemaster
+DB_SSL=false
 PORT=3000
-JWT_SECRET=miclave123
+JWT_SECRET=una_clave_larga_y_aleatoria
+
+DB_SSL=true cuando la base de datos exige conexión cifrada (Aiven, TiDB, Azure...).
+JWT_SECRET se puede generar con:
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+El .env nunca se sube a GitHub (está en .gitignore): tiene las contraseñas.
 
 El compilador (Wandbox) no necesita cuenta, API key ni configuración. Opcional:
 WANDBOX_URL=https://wandbox.org   (solo si se usa otra instancia de Wandbox)
 
 4. Ejecutar servidor
-node server.js
+npm start
 
 5. Abrir la web en http://localhost:3000 y la app móvil en http://localhost:3000/movil/
+
+Despliegue en la nube:
+
+La base de datos de producción es MySQL en Aiven (aiven.io), en la base defaultdb.
+Para publicar la app, crear un servicio web de Node (Render, Railway...) conectado a este
+repositorio, con:
+- Comando de instalación: npm install
+- Comando de inicio: npm start
+- Variables de entorno: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, DB_SSL=true y
+  JWT_SECRET, con los valores de Aiven (los mismos del .env).
+  No poner PORT: el servicio la asigna solo.
+
+El servicio da una dirección https; la web queda en esa dirección y la app móvil en /movil/
+(con https se puede instalar en el celular como app).
+
+Copiar una base de datos local a Aiven (estructura y datos):
+mysqldump -u root -p --single-transaction --set-gtid-purged=OFF --no-tablespaces --default-character-set=utf8mb4 codemaster > respaldo.sql
+mysql -h HOST_AIVEN -P PUERTO_AIVEN -u avnadmin -p --ssl-mode=REQUIRED --default-character-set=utf8mb4 defaultdb < respaldo.sql
 
 Frontend (carpeta public/):
 
@@ -82,7 +108,7 @@ versión de cada compilador, que se consulta en vivo a Wandbox.
 
 Tablas: rol, users, dificultad, lenguaje, challenge, challenge_test, challenge_saved, classrom (cursos),
 classrom_has_users, classrom_has_challenge, classrom_like, classrom_comment,
-classrom_saved, stadistic, RANKING, stadistic_has_RANKING, achievement,
+classrom_saved, stadistic, ranking, stadistic_has_ranking, achievement,
 users_has_achievement y notification.
 
 Autenticación:

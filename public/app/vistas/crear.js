@@ -1,7 +1,7 @@
-// Crear: cursos y retos (docentes y administradores), y editar los retos propios.
+// Crear: cursos y retos (docentes y administradores), editar los retos propios y, solo el admin, crear cuentas de docente.
 // Los estudiantes ven el editor libre.
 import { api, sesion, obtenerLenguajes, obtenerDificultades } from "../api.js";
-import { h, icono, ir, aviso, avisarLogros, dialogo, conCarga, pestanas, vacio, cargando, mostrarError } from "../ui.js";
+import { h, icono, ir, aviso, avisarLogros, dialogo, conCarga, pestanas, vacio, cargando, mostrarError, avatar } from "../ui.js";
 import { tarjetaEditorLibre, tarjetaReto, eliminarReto } from "./retos.js";
 
 const MAX_CASOS = 5;
@@ -52,23 +52,100 @@ export function mostrar(contenedor, pestana) {
     return;
   }
 
-  const activa = ["reto", "mis-retos"].includes(pestana) ? pestana : "curso";
+  const esAdmin = sesion.usuario.rol === "admin";
+  const opciones = [
+    ["curso", "Nuevo curso"],
+    ["reto", "Nuevo reto"],
+    ["mis-retos", "Mis retos"],
+  ];
+  if (esAdmin) opciones.push(["docentes", "Docentes"]); // solo el admin crea cuentas de docente
+
+  const activa = opciones.some(([clave]) => clave === pestana) ? pestana : "curso";
   const cuerpo = h("div");
   contenedor.replaceChildren(
-    pestanas(
-      [
-        ["curso", "Nuevo curso"],
-        ["reto", "Nuevo reto"],
-        ["mis-retos", "Mis retos"],
-      ],
-      activa,
-      (clave) => ir(`crear/${clave}`)
-    ),
+    pestanas(opciones, activa, (clave) => ir(`crear/${clave}`)),
     cuerpo
   );
   if (activa === "curso") formularioCurso(cuerpo);
   else if (activa === "reto") formularioReto(cuerpo);
+  else if (activa === "docentes") gestionDocentes(cuerpo);
   else misRetos(cuerpo);
+}
+
+// Docentes (solo admin): formulario para crear una cuenta de docente y lista de los que ya existen
+const CORREO = /^[\w.+-]+@([\w-]+\.)+[\w-]{2,}$/;
+
+function gestionDocentes(contenedor) {
+  const nombre = h("input", { maxlength: "255", placeholder: "Ej: Ana Gómez", autocomplete: "off" });
+  const correo = h("input", { type: "email", maxlength: "255", placeholder: "Ej: ana@codemaster.com", autocomplete: "off" });
+  const clave = h("input", { type: "text", maxlength: "72", placeholder: "Mínimo 6 caracteres", autocomplete: "new-password" });
+  const lista = h("div", null, cargando());
+
+  const boton = h("button", { class: "btn btn-bloque", type: "submit" }, icono("person_add"), "Crear docente");
+  const formulario = h(
+    "form",
+    {
+      class: "tarjeta",
+      novalidate: true,
+      onsubmit: (e) => {
+        e.preventDefault();
+        const datos = { nombre: nombre.value.trim(), correo: correo.value.trim(), password: clave.value, rol: "docente" };
+        if (!datos.nombre) return aviso("Escribe el nombre del docente", "error");
+        if (!CORREO.test(datos.correo)) return aviso("Escribe un correo válido", "error");
+        if (datos.password.length < 6) return aviso("La contraseña debe tener al menos 6 caracteres", "error");
+
+        conCarga(boton, async () => {
+          try {
+            await api("/usuarios", { metodo: "POST", datos });
+            await dialogo({
+              titulo: "Docente creado",
+              contenido: [
+                h("p", { texto: "Comparte estos datos con el docente para que ingrese a CodeMaster:" }),
+                h("p", { style: "margin-top:12px" }, h("strong", { texto: "Correo: " }), datos.correo),
+                h("p", null, h("strong", { texto: "Contraseña: " }), datos.password),
+              ],
+              aceptar: "Entendido",
+              cancelar: null,
+            });
+            formulario.reset();
+            cargarDocentes(lista);
+          } catch (error) {
+            aviso(error.message, "error");
+          }
+        });
+      },
+    },
+    h("h3", { style: "margin-top:0", texto: "Nueva cuenta de docente" }),
+    h("p", { class: "meta", style: "margin-bottom:16px", texto: "El docente podrá crear cursos y retos. Ingresa con el correo y la contraseña que definas aquí." }),
+    campo("Nombre completo", nombre),
+    campo("Correo", correo),
+    campo("Contraseña", clave, "Se mostrará al crear la cuenta para que se la compartas al docente."),
+    boton
+  );
+
+  contenedor.replaceChildren(formulario, h("h2", { class: "seccion-titulo", texto: "Docentes registrados" }), lista);
+  cargarDocentes(lista);
+}
+
+async function cargarDocentes(lista) {
+  lista.replaceChildren(cargando());
+  try {
+    const docentes = (await api("/usuarios")).filter((u) => u.rol === "docente");
+    lista.replaceChildren(
+      ...(docentes.length
+        ? docentes.map((d) =>
+            h(
+              "div",
+              { class: "fila", style: "margin-bottom:8px" },
+              avatar(d.nombre, d.id),
+              h("div", { class: "fila-texto" }, h("p", { class: "fila-titulo", texto: d.nombre }), h("p", { class: "fila-sub", texto: d.correo }))
+            )
+          )
+        : [vacio("school", "Aún no hay docentes registrados.")])
+    );
+  } catch (error) {
+    lista.replaceChildren(h("p", { class: "campo-error", texto: error.message }));
+  }
 }
 
 // Retos que creó el usuario, con su menú para editarlos o eliminarlos
