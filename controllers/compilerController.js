@@ -1,11 +1,17 @@
 import db from "../config/db.js";
 import catalogos from "../services/catalogos.js";
 import compilador from "../services/wandbox.js";
+import judge0 from "../services/judge0.js";
 import logros from "../services/logros.js";
 import notificaciones from "../services/notificaciones.js";
 
 const MAX_CARACTERES = 50000;
 const MAX_SIMULTANEAS = 4; // Wandbox limita las peticiones por IP y todas salen desde este servidor
+
+// Compiladores que el usuario puede elegir en el editor (menú "Compilador").
+// Si no se indica ninguno se usa Wandbox; Judge0 es el respaldo cuando Wandbox falla.
+const MOTORES = { wandbox: compilador, judge0 };
+const elegirMotor = (clave = "wandbox") => MOTORES[clave] ?? null;
 
 // Usuarios con una ejecución en curso (una a la vez por usuario)
 const enCurso = new Set();
@@ -75,11 +81,16 @@ const obtenerLenguajes = async (req, res) => {
   res.json(lista);
 };
 
-// POST /compiler/run  body: { lenguaje, codigo, entrada?, challengeId? }
+// POST /compiler/run  body: { lenguaje, codigo, entrada?, challengeId?, motor? ("wandbox" | "judge0") }
 // Responde cuando el programa termina (entre 2 y 10 s normalmente; ~40 s si no termina).
 const ejecutarCodigo = async (req, res) => {
-  const { lenguaje, codigo, entrada = "", challengeId } = req.body;
+  const { lenguaje, codigo, entrada = "", challengeId, motor } = req.body;
   const lang = await catalogos.lenguaje(lenguaje);
+  const servicio = elegirMotor(motor);
+
+  if (!servicio) {
+    return res.status(400).json({ error: "Compilador no válido" });
+  }
 
   if (!lang) {
     return res.status(400).json({ error: "Lenguaje no soportado" });
@@ -111,7 +122,7 @@ const ejecutarCodigo = async (req, res) => {
       }
     }
 
-    const resultado = await compilador.ejecutar(lang, codigo, entrada);
+    const resultado = await servicio.ejecutar(lang, codigo, entrada);
 
     // Si falla la estadística no se pierde el resultado de la ejecución
     let compilaciones = null;
@@ -132,11 +143,16 @@ const ejecutarCodigo = async (req, res) => {
   }
 };
 
-// POST /compiler/submit  body: { challengeId, codigo }
+// POST /compiler/submit  body: { challengeId, codigo, motor? ("wandbox" | "judge0") }
 // Ejecuta el código con cada caso de prueba del reto (se detiene en el primero que falla).
 // Si pasa todos, el reto queda resuelto y suma los puntos de su dificultad (solo la primera vez).
 const enviarSolucion = async (req, res) => {
-  const { challengeId, codigo } = req.body;
+  const { challengeId, codigo, motor } = req.body;
+  const servicio = elegirMotor(motor);
+
+  if (!servicio) {
+    return res.status(400).json({ error: "Compilador no válido" });
+  }
 
   const invalido = validarCodigo(codigo);
   if (invalido) {
@@ -172,7 +188,7 @@ const enviarSolucion = async (req, res) => {
     let tiempo = 0;
 
     for (const [i, caso] of casos.entries()) {
-      const resultado = await compilador.ejecutar(lang, codigo, caso.input);
+      const resultado = await servicio.ejecutar(lang, codigo, caso.input);
       const aprobado = resultado.exito && normalizar(resultado.salida) === normalizar(caso.expected_output);
       tiempo += resultado.tiempo;
 

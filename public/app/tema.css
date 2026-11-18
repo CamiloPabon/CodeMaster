@@ -355,6 +355,8 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--azul); f
 .barra-editor .grupo { display: flex; align-items: center; gap: 8px; }
 .barra-editor .grupo:first-child { flex: 1 1 260px; }
 .barra-editor .grupo:first-child .campo { flex: 1; max-width: 320px; }
+.barra-editor .grupo:first-child .campo-motor { flex: 0 1 190px; min-width: 150px; }
+.barra-editor .grupo:first-child { flex-wrap: wrap; }
 .layout-movil .barra-editor .botones { width: 100%; }
 .layout-movil .barra-editor .botones .btn { flex: 1; }
 @media (max-width: 600px) {

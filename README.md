@@ -251,11 +251,18 @@ POST /notifications/read  -> marca todas como leídas
 Se generan cuando alguien se une, da like o comenta en tu curso, cuando agregan un
 reto a un curso tuyo, cuando resuelves un reto y cuando desbloqueas un logro.
 
-Compilador (Wandbox):
+Compilador (Wandbox, con Judge0 de respaldo):
 
 El código se compila y ejecuta en Wandbox (https://wandbox.org), un compilador en línea
 gratuito que no necesita cuenta ni API key. Los lenguajes están en la tabla lenguaje; para
 cada uno se usa la versión estable más reciente que ofrezca Wandbox.
+
+Respaldo: Judge0 CE (https://judge0.com), de código abierto (GPL v3). En el editor, el menú
+"Compilador" deja elegir Wandbox o Judge0 (la app recuerda la elección). En la API se elige
+con "motor": "wandbox" (por defecto) o "judge0" en /compiler/run y /compiler/submit.
+Usa la instancia pública gratuita https://ce.judge0.com (sin API key, con límite de
+peticiones). Para usar un Judge0 propio: JUDGE0_URL=https://mi-servidor y, si lo pide,
+JUDGE0_TOKEN=clave. Los lenguajes de Judge0 están en services/judge0.js.
 
 Lenguajes disponibles
 GET /compiler/languages

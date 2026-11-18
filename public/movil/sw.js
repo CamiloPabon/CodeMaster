@@ -1,6 +1,6 @@
 // Service worker de la app móvil: guarda la interfaz (no los datos) para que
 // abra rápido y muestre la pantalla aunque no haya conexión.
-const VERSION = "codemaster-v4";
+const VERSION = "codemaster-v5";
 const INTERFAZ = [
   "/movil/",
   "/movil/manifest.webmanifest",

@@ -9,6 +9,29 @@ const MONACO = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min";
 const borradores = {};
 let lenguajeLibre = null;
 
+// Compiladores en la nube que el usuario puede elegir. Judge0 es el respaldo si Wandbox falla.
+const MOTORES = [
+  ["wandbox", "Wandbox"],
+  ["judge0", "Judge0 (respaldo)"],
+];
+const CLAVE_MOTOR = "codemaster_motor";
+let motor = "wandbox";
+try {
+  const guardado = localStorage.getItem(CLAVE_MOTOR);
+  if (MOTORES.some(([clave]) => clave === guardado)) motor = guardado;
+} catch {
+  /* sin almacenamiento local se usa Wandbox */
+}
+const nombreMotor = (clave) => MOTORES.find(([c]) => c === clave)?.[1] ?? clave;
+
+// Mensaje de error de la ejecución; si el compilador falló, sugiere cambiar al otro
+const mensajeError = (error) => {
+  const fallaDelCompilador = !error.status || error.status === 429 || error.status >= 500;
+  if (!fallaDelCompilador) return error.message;
+  const otro = MOTORES.find(([clave]) => clave !== motor);
+  return `${error.message}. Prueba con otro compilador: elige "${otro[1]}" en el menú Compilador.`;
+};
+
 // Monaco (el editor de VS Code) se carga una sola vez y solo cuando se necesita.
 // Si no hay internet para el CDN, se usa un textarea.
 let monacoListo = null;
@@ -97,6 +120,23 @@ async function montar(contenedor, retoId, ctx) {
     "select",
     { "aria-label": "Lenguaje", disabled: !!reto },
     lenguajes.map((l) => h("option", { value: l.clave, selected: l.clave === lenguaje }, l.version ? `${l.nombre} (${l.version})` : l.nombre))
+  );
+  const selectMotor = h(
+    "select",
+    {
+      "aria-label": "Compilador",
+      title: "Compilador en la nube que ejecuta tu código",
+      onchange: (e) => {
+        motor = e.target.value;
+        try {
+          localStorage.setItem(CLAVE_MOTOR, motor);
+        } catch {
+          /* la elección dura hasta recargar */
+        }
+        aviso(`Compilador: ${nombreMotor(motor)}`);
+      },
+    },
+    MOTORES.map(([clave, nombre]) => h("option", { value: clave, selected: clave === motor }, nombre))
   );
   const entrada = h("textarea", { rows: "3", placeholder: "Datos que leerá tu programa (opcional)", "aria-label": "Entrada estándar" });
   const estado = h("span", { class: "estado" }, "Sin ejecutar");
@@ -201,7 +241,7 @@ async function montar(contenedor, retoId, ctx) {
     consola.replaceChildren(linea("Compilando y ejecutando tu código en la nube...", "suave"));
     meta.textContent = "";
     try {
-      const datos = { lenguaje, codigo, entrada: entrada.value };
+      const datos = { lenguaje, codigo, entrada: entrada.value, motor };
       if (reto) datos.challengeId = reto.id;
       const r = await conReloj("Ejecutando...", () => api("/compiler/run", { metodo: "POST", datos }));
 
@@ -222,7 +262,7 @@ async function montar(contenedor, retoId, ctx) {
       avisarLogros(r.nuevosLogros);
     } catch (error) {
       fijarEstado("Error", "mal");
-      consola.replaceChildren(linea(error.message, "error"));
+      consola.replaceChildren(linea(mensajeError(error), "error"));
     } finally {
       bloquear(false);
       mostrarConsola();
@@ -241,7 +281,7 @@ async function montar(contenedor, retoId, ctx) {
     consola.replaceChildren(linea(`Probando tu solución con ${plural(reto.casos, "caso", "casos")} de prueba...`, "suave"));
     meta.textContent = "";
     try {
-      const r = await conReloj("Calificando...", () => api("/compiler/submit", { metodo: "POST", datos: { challengeId: reto.id, codigo } }));
+      const r = await conReloj("Calificando...", () => api("/compiler/submit", { metodo: "POST", datos: { challengeId: reto.id, codigo, motor } }));
       const aprobados = r.casos.filter((c) => c.aprobado).length;
       fijarEstado(r.aprobado ? "¡Reto resuelto!" : "No pasó las pruebas", r.aprobado ? "ok" : "mal");
 
@@ -273,7 +313,7 @@ async function montar(contenedor, retoId, ctx) {
       avisarLogros(r.nuevosLogros);
     } catch (error) {
       fijarEstado("Error", "mal");
-      consola.replaceChildren(linea(error.message, "error"));
+      consola.replaceChildren(linea(mensajeError(error), "error"));
     } finally {
       bloquear(false);
       mostrarConsola();
@@ -305,6 +345,7 @@ async function montar(contenedor, retoId, ctx) {
         "div",
         { class: "grupo" },
         h("div", { class: "campo" }, select),
+        h("div", { class: "campo campo-motor" }, selectMotor),
         h("button", { class: "btn-texto sin-linea", onclick: restablecer }, icono("restart_alt", "chico"), " Restablecer")
       ),
       h("div", { class: "grupo botones" }, btnEjecutar, btnEnviar)
